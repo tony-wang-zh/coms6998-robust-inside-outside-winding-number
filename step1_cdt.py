@@ -86,6 +86,9 @@ def enforce_constraints(pts_list, triangles, segments):
     Iteratively insert Steiner points at intersections of constraint segments
     with Delaunay edges until all constraints are present in the triangulation.
     Uses a simple re-Delaunay after each insertion.
+
+    Iterate through input edges, check intersection with edges created by triangulation 
+    Insert steiner points at the intersections, and redo triangulation 
     """
     pts = np.array(pts_list, dtype=float)
     max_iter = 200
@@ -132,6 +135,70 @@ def enforce_constraints(pts_list, triangles, segments):
     return pts.tolist(), triangles
 
 
+
+def seg_intersect_pt(p1, p2, p3, p4, tol=1e-10):
+    """
+    check if two line segments, p1p2 and p3p4 intersect 
+    Return the point along p1->p2 where it crosses p3->p4,
+    or None if no proper interior intersection exists.
+    """
+    d1 = p2 - p1
+    d2 = p4 - p3
+    cross = d1[0]*d2[1] - d1[1]*d2[0]
+    if abs(cross) < tol:
+        return None
+    diff = p3 - p1
+    t = (diff[0]*d2[1] - diff[1]*d2[0]) / cross
+    u = (diff[0]*d1[1] - diff[1]*d1[0]) / cross
+    if tol < t < 1 - tol and tol < u < 1 - tol:
+        return p1 + t * (p2 - p1)
+    else:
+        return None
+
+def naive_CDT(vertices, segments):
+    """
+    a simpler triangluation with refinement that just finds all intersections between 
+    og edges and triangles sides and redo triangulation 
+    """
+    # --- triangulation 
+    verts = np.array(vertices, dtype=float)
+    segments = segments  # list of [i, j]
+    tri_obj = Delaunay(verts)
+    triangles = tri_obj.simplices.tolist() # triangles is a list of connectivity between points in pts
+
+    # --- refinement 
+    # --- find triangle sides --- 
+    triangle_sides = set()
+    for triangle in triangles:
+        for i in range(3):
+            j = (i + 1) % 3
+            triangle_sides.add(frozenset([triangle[i], triangle[j]]))
+    
+    # --- find intersections between triangle sides and og segemnts 
+    new_points = []
+    for triangle_side in triangle_sides:
+        for segment in segments:
+            seg_pt_0 = vertices[segment[0]]
+            seg_pt_1 = vertices[segment[1]]
+            tri_pt_0 = vertices[list(triangle_side)[0]]
+            tri_pt_1 = vertices[list(triangle_side)[1]]
+            intersct_pt = seg_intersect_pt(
+                seg_pt_0,
+                seg_pt_1,
+                tri_pt_0,
+                tri_pt_1,
+            )
+            if intersct_pt is not None:
+                new_points.append(intersct_pt)
+    n_new_points = len(new_points)
+
+    # redo triangulation 
+    combined_points = np.array([*vertices, *new_points], dtype=float)
+    tri_obj = Delaunay(combined_points)
+    triangles = tri_obj.simplices.tolist()
+    return combined_points, triangles, n_new_points
+
+
 def constraint_edge_present(triangles, cs, ct):
     """Check if the directed edge (cs,ct) or (ct,cs) appears in the triangulation."""
     for tri in triangles:
@@ -152,35 +219,30 @@ def main(input_path, output_path):
     with open(input_path) as f:
         data = json.load(f)
 
-    raw_verts = data["vertices"]
-    raw_segs  = data["segments"]
+    vertices = data["vertices"]
+    segments  = data["segments"]
     desc = data.get("description", input_path)
 
-    pts = np.array(raw_verts, dtype=float)
-    segments = raw_segs  # list of [i, j]
 
-    print(f"Input: {len(pts)} vertices, {len(segments)} constraint segments")
+    # # --- Step 1b: Enforce constraints ---
+    # pts_list, triangles = enforce_constraints(pts.tolist(), triangles, segments)
+    # pts = np.array(pts_list)
+    # n_steiner = len(pts) - len(vertices)
+    # print(f"After constraint enforcement: {len(triangles)} triangles, {n_steiner} Steiner points added")
 
-    # --- Step 1a: Initial Delaunay of all vertices ---
-    tri_obj = Delaunay(pts)
-    triangles = tri_obj.simplices.tolist()
-    print(f"Initial Delaunay: {len(triangles)} triangles")
 
-    # --- Step 1b: Enforce constraints ---
-    pts_list, triangles = enforce_constraints(pts.tolist(), triangles, segments)
-    pts = np.array(pts_list)
-    n_steiner = len(pts) - len(raw_verts)
-    print(f"After constraint enforcement: {len(triangles)} triangles, {n_steiner} Steiner points added")
+    # --- naive CDT ----
+    pts, triangles, n_steiner = naive_CDT(vertices, segments)
+
 
     # --- Save output ---
     output = {
         "description": desc,
-        "original_vertices": raw_verts,
+        "original_vertices": vertices,
         "vertices": pts.tolist(),
         "triangles": triangles,
         "segments": segments,
-        "n_original_vertices": len(raw_verts),
-        "n_steiner": n_steiner
+        "n_original_vertices": len(vertices),
     }
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2)
@@ -192,10 +254,10 @@ def main(input_path, output_path):
 
     for ax_idx, (ax, tris_to_show, title) in enumerate(zip(
         axes,
-        [Delaunay(np.array(raw_verts)).simplices.tolist(), triangles],
+        [Delaunay(np.array(vertices)).simplices.tolist(), triangles],
         ["Initial Delaunay\n(all vertices, no constraints)", "After Constraint Enforcement"]
     )):
-        pts_show = np.array(raw_verts) if ax_idx == 0 else pts
+        pts_show = np.array(vertices) if ax_idx == 0 else pts
         tris_arr = np.array(tris_to_show)
 
         # Draw triangles
@@ -205,17 +267,17 @@ def main(input_path, output_path):
             ax.add_patch(poly)
 
         # Draw constraint segments
-        for cs, ct in segments:
-            ax.plot([raw_verts[cs][0], raw_verts[ct][0]],
-                    [raw_verts[cs][1], raw_verts[ct][1]],
+        for cs, ct in raw:
+            ax.plot([vertices[cs][0], vertices[ct][0]],
+                    [vertices[cs][1], vertices[ct][1]],
                     'r-', linewidth=2.5, zorder=5)
 
         # Plot original vertices
-        orig_pts = np.array(raw_verts)
+        orig_pts = np.array(vertices)
         ax.scatter(orig_pts[:, 0], orig_pts[:, 1], c='navy', s=40, zorder=6)
 
         if ax_idx == 1 and n_steiner > 0:
-            steiner_pts = pts[len(raw_verts):]
+            steiner_pts = pts[len(vertices):]
             ax.scatter(steiner_pts[:, 0], steiner_pts[:, 1],
                        c='orange', s=30, marker='^', zorder=6, label=f"Steiner pts ({n_steiner})")
             ax.legend(fontsize=8)
