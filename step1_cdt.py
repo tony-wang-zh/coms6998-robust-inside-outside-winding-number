@@ -34,8 +34,11 @@ from scipy.spatial import Delaunay
 # ── geometry helpers ──────────────────────────────────────────────────────────
 
 def seg_intersect(p1, p2, p3, p4, tol=1e-10):
-    """Return the parameter t in [0,1] along p1->p2 where it crosses p3->p4,
-    or None if no proper interior intersection exists."""
+    """
+    check if two line segments, p1p2 and p3p4 intersect 
+    Return the parameter t in [0,1] along p1->p2 where it crosses p3->p4,
+    or None if no proper interior intersection exists.
+    """
     d1 = p2 - p1
     d2 = p4 - p3
     cross = d1[0]*d2[1] - d1[1]*d2[0]

@@ -61,17 +61,21 @@ def winding_number_2d(p, vertices, segments):
     """
     total_angle = 0.0
     px, py = p
-    for cs, ct in segments:
+    for cs, ct in segments: 
         a = np.array(vertices[cs]) - np.array(p)
         b = np.array(vertices[ct]) - np.array(p)
         # Skip degenerate (point on segment endpoint)
         if np.linalg.norm(a) < 1e-12 or np.linalg.norm(b) < 1e-12:
             continue
-        total_angle += signed_angle(a, b)
-    return total_angle / (2.0 * math.pi)
+        total_angle += signed_angle(a, b) # uses assumption that segments are oriented
+    return total_angle / (2.0 * math.pi) # radians 
 
 
 def triangle_centroid(pts, tri):
+    """
+    find center point of triangle 
+    winding number of this point represents triangle 
+    """
     a, b, c = pts[tri[0]], pts[tri[1]], pts[tri[2]]
     return [(a[0]+b[0]+c[0])/3, (a[1]+b[1]+c[1])/3]
 

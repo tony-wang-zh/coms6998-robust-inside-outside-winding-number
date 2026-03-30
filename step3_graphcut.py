@@ -52,6 +52,7 @@ def build_adjacency(triangles, pts):
     edge_to_tris = {}
     pts_np = np.array(pts)
 
+    # edge to triangle 
     for i, tri in enumerate(triangles):
         for k in range(3):
             a, b = tri[k], tri[(k+1)%3]
@@ -76,20 +77,25 @@ def graphcut_segment(winding, adjacency, gamma=5.0, sigma=0.25):
     """
     s-t min-cut on the CDT dual graph.
 
-    Node 's' (source) = INSIDE
-    Node 't' (sink)   = OUTSIDE
 
-    Terminal weights:
-        s -> i  (cost of labeling i as OUTSIDE) = data term u_i(outside)
-        i -> t  (cost of labeling i as INSIDE)  = data term u_i(inside)
+    winding number weights / data term (eq. 9):
+        outside -> i  (cost of labeling i as OUTSIDE) = data term u_i(outside)
+        inside -> t  (cost of labeling i as INSIDE)  = data term u_i(inside)
 
-    Pairwise weights (eq. 10):
+    min cut max flow algorithm starts and ends at source and sink, use inside as source and outside as sink
+
+
+    Pairwise weights / cloesness of winding number between neighbor triangles (eq. 10):
         i <-> j = gamma * edge_len * exp(-(w_i - w_j)^2 / (2*sigma^2))
     """
     n = len(winding)
     G = nx.DiGraph()
-    G.add_node("s")
-    G.add_node("t")
+    # inside and outside nodes 
+    # edge between these two nodes and tet nodes 
+    # carry the "data term" aka cost from winding number themselves 
+    # this is used for graph cut algorithm 
+    G.add_node("inside") 
+    G.add_node("outside")
 
     INF = 1e9
 
@@ -97,36 +103,39 @@ def graphcut_segment(winding, adjacency, gamma=5.0, sigma=0.25):
         # Use abs(w) so both CW and CCW orientations work correctly
         aw = abs(w)
         # Data term
+        # aka direct indication from winding number of whether inside or outside
         cost_outside = max(aw, 0.0)       # penalty if we call this OUTSIDE (high w -> inside)
         cost_inside  = max(1.0 - aw, 0.0) # penalty if we call this INSIDE (low w -> outside)
 
         # s -> i  with capacity = penalty for labeling OUTSIDE
-        G.add_edge("s", i, capacity=cost_outside)
+        G.add_edge("inside", i, capacity=cost_outside)
         # i -> t  with capacity = penalty for labeling INSIDE
-        G.add_edge(i, "t", capacity=cost_inside)
+        G.add_edge(i, "outside", capacity=cost_inside)
 
+    # smoothness term 
+    # aka difference between winding number of neighboring tirangles
     for i, neighbors in adjacency.items():
         for j, edge_len in neighbors:
-            if i >= j:
+            if i >= j: # avoid double counting edge 
                 continue
             w_diff = winding[i] - winding[j]
-            smooth = gamma * edge_len * math.exp(-(w_diff**2) / (2 * sigma**2))
+            smooth = gamma * edge_len * math.exp(-(w_diff**2) / (2 * sigma**2)) 
             # Add both directions for undirected smoothness
             G.add_edge(i, j, capacity=smooth)
             G.add_edge(j, i, capacity=smooth)
 
     # Min-cut
-    cut_value, (reachable, non_reachable) = nx.minimum_cut(G, "s", "t")
+    cut_value, (reachable, non_reachable) = nx.minimum_cut(G, "inside", "outside")
     print(f"  Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     print(f"  Min-cut value: {cut_value:.4f}")
 
     # Nodes reachable from s = INSIDE
-    labels = np.zeros(n, dtype=int)
+    labels_inside = np.zeros(n, dtype=int)
     for node in reachable:
         if isinstance(node, int):
-            labels[node] = 1  # inside
+            labels_inside[node] = 1  # inside
 
-    return labels
+    return labels_inside
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
