@@ -185,11 +185,10 @@ def main(input_path, output_path, gamma=5.0, sigma=0.25):
 
     threshold_labels = (winding > 0.5).astype(int)
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    fig.suptitle(f"Step 3: Graph Cut Inside-Outside Segmentation\n{desc}", fontsize=11)
+    fig, axes = plt.subplots(1, 2, figsize=(18, 6))
+    fig.suptitle(f"Step 3: Graph Cut Inside-Outside Segmentation", fontsize=11)
 
     panel_data = [
-        (threshold_labels,  "Winding Number Threshold\n(w > 0.5, no smoothness)", "#e63946", "#a8dadc"),
         (labels,            f"Graph Cut Result\n(γ={gamma}, σ={sigma})",          "#e63946", "#a8dadc"),
         (labels,            "Final Interior Triangulation\n(inside only)",         "#457b9d", None),
     ]
@@ -234,43 +233,6 @@ def main(input_path, output_path, gamma=5.0, sigma=0.25):
     plt.savefig(img_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Visualization saved to {img_path}")
-
-    # --- Extra: side-by-side comparison of threshold vs graphcut ---
-    fig2, axes2 = plt.subplots(1, 2, figsize=(12, 5))
-    fig2.suptitle(f"Threshold vs. Graph Cut Comparison\n{desc}", fontsize=11)
-
-    for ax, (lbl, title) in zip(axes2, [
-        (threshold_labels, "Simple Threshold (w > 0.5)"),
-        (labels, f"Graph Cut (γ={gamma}, σ={sigma})")
-    ]):
-        for i, tri in enumerate(tris_np):
-            poly_pts = pts_np[tri]
-            fc = "#e63946" if lbl[i] == 1 else "#a8dadc"
-            ec = "#444444" if lbl[i] == 1 else "#aaaaaa"
-            patch = plt.Polygon(poly_pts, facecolor=fc, edgecolor=ec,
-                                linewidth=0.4, alpha=0.85)
-            ax.add_patch(patch)
-
-        for cs, ct in segments:
-            ax.plot([orig_np[cs,0], orig_np[ct,0]],
-                    [orig_np[cs,1], orig_np[ct,1]], 'k-', linewidth=2.2, zorder=5)
-
-        ax.set_title(title, fontsize=10)
-        ax.set_aspect("equal"); ax.autoscale(); ax.margins(0.1)
-
-        n_in = int(lbl.sum())
-        patches = [
-            mpatches.Patch(facecolor="#e63946", label=f"Inside ({n_in})"),
-            mpatches.Patch(facecolor="#a8dadc", label=f"Outside ({len(lbl)-n_in})"),
-        ]
-        ax.legend(handles=patches, fontsize=8)
-
-    plt.tight_layout()
-    cmp_path = output_path.replace(".json", "_comparison.png")
-    plt.savefig(cmp_path, dpi=150, bbox_inches="tight")
-    plt.close()
-    print(f"Comparison visualization saved to {cmp_path}")
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
