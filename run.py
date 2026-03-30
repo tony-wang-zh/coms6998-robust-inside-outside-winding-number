@@ -42,8 +42,8 @@ def main(input_path):
     run(["step3_graphcut.py",
          os.path.join(OUTPUT_DIR, f"{name}_step2_winding.json"),
          os.path.join(OUTPUT_DIR, f"{name}_step3_result.json"),
-         "5.0",
-         "0.25"])
+         "2.0",
+         "0.5"])
 
 
 
