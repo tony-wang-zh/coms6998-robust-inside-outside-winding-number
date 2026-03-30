@@ -183,10 +183,10 @@ def naive_CDT(vertices, segments):
             tri_pt_0 = vertices[list(triangle_side)[0]]
             tri_pt_1 = vertices[list(triangle_side)[1]]
             intersct_pt = seg_intersect_pt(
-                seg_pt_0,
-                seg_pt_1,
-                tri_pt_0,
-                tri_pt_1,
+                np.array(seg_pt_0),
+                np.array(seg_pt_1),
+                np.array(tri_pt_0),
+                np.array(tri_pt_1),
             )
             if intersct_pt is not None:
                 new_points.append(intersct_pt)
@@ -267,7 +267,7 @@ def main(input_path, output_path):
             ax.add_patch(poly)
 
         # Draw constraint segments
-        for cs, ct in raw:
+        for cs, ct in segments:
             ax.plot([vertices[cs][0], vertices[ct][0]],
                     [vertices[cs][1], vertices[ct][1]],
                     'r-', linewidth=2.5, zorder=5)
